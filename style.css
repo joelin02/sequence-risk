@@ -389,15 +389,143 @@ body {
 }
 
 .results-canvas-card {
+  position: relative;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
   padding: 16px 8px;
 }
 
+.chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 5;
+  min-width: 140px;
+}
+
+.chart-tooltip .tooltip-value {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 2px 0;
+}
+
+.chart-tooltip .tooltip-start,
+.chart-tooltip .tooltip-year {
+  color: var(--text-secondary);
+}
+
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 0 8px 12px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.toggle-track {
+  width: 34px;
+  height: 14px;
+  border-radius: 999px;
+  background: #3c3f4a;
+  position: relative;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #8b8d97;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.toggle input:checked + .toggle-track {
+  background: rgba(138, 180, 248, 0.35);
+}
+
+.toggle input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(14px);
+  background: var(--accent);
+}
+
+.toggle-text {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.log-scale-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 .results-canvas {
   display: block;
   width: 100%;
+  cursor: crosshair;
+}
+
+.failure-list-section {
+  margin-top: 16px;
+}
+
+.failure-list-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.failure-list {
+  columns: 220px;
+  column-gap: 20px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.failure-list-item {
+  break-inside: avoid;
+  padding: 2px 0;
+  white-space: nowrap;
+}
+
+.failure-list-item .arrow {
+  color: var(--down);
+  margin: 0 4px;
 }
 
 @media (max-width: 600px) {

@@ -139,7 +139,20 @@
       <h2 class="section-title">3. Results</h2>
       <div class="results-stats" id="results-stats"></div>
       <div class="results-canvas-card">
+        <div class="chart-controls">
+          <label class="toggle">
+            <input type="checkbox" id="chart-log-toggle">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">Log scale</span>
+          </label>
+          <span class="log-scale-note hidden" id="log-scale-note">Log scale can't show $0 or negative balances — failed cycles are flattened to the bottom edge.</span>
+        </div>
         <canvas id="results-canvas" class="results-canvas"></canvas>
+        <div class="chart-tooltip hidden" id="chart-tooltip"></div>
+      </div>
+      <div class="failure-list-section hidden" id="failure-list-section">
+        <h3 class="failure-list-title" id="failure-list-title"></h3>
+        <div class="failure-list" id="failure-list"></div>
       </div>
     </section>
   </div>

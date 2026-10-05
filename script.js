@@ -56,6 +56,135 @@
   const resultsSection = document.getElementById('results-section');
   const resultsStatsEl = document.getElementById('results-stats');
   const resultsCanvas = document.getElementById('results-canvas');
+  const chartLogToggle = document.getElementById('chart-log-toggle');
+  const logScaleNoteEl = document.getElementById('log-scale-note');
+  const failureListSection = document.getElementById('failure-list-section');
+  const failureListTitleEl = document.getElementById('failure-list-title');
+  const failureListEl = document.getElementById('failure-list');
+  const chartTooltip = document.getElementById('chart-tooltip');
+
+  // Set at the end of every drawResultsChart() call: a pristine pixel
+  // snapshot of the base chart (axes + density, no highlight) and the
+  // geometry/data needed to hit-test the cursor against it. Hovering
+  // restores the snapshot (cheap — no re-binning) and draws just the
+  // highlighted line and dot on top.
+  let lastChartSnapshot = null;
+  let lastChartGeometry = null;
+
+  chartLogToggle.addEventListener('change', () => {
+    logScaleNoteEl.classList.toggle('hidden', !chartLogToggle.checked);
+    if (lastRunCycles) drawResultsChart(lastRunCycles, lastRunYears);
+  });
+
+  resultsCanvas.addEventListener('mousemove', (e) => handleChartHover(e.clientX, e.clientY));
+  resultsCanvas.addEventListener('mouseleave', hideChartHover);
+  resultsCanvas.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 1) return;
+    handleChartHover(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  resultsCanvas.addEventListener('touchend', hideChartHover);
+
+  function handleChartHover(clientX, clientY) {
+    if (!lastChartGeometry || !lastChartSnapshot) return;
+    const rect = resultsCanvas.getBoundingClientRect();
+    const mouseX = clientX - rect.left;
+    const mouseY = clientY - rect.top;
+    const { margin, innerWidth, innerHeight, mapper, monthCount, cycles } = lastChartGeometry;
+
+    if (mouseX < margin.left || mouseX > margin.left + innerWidth || mouseY < margin.top || mouseY > margin.top + innerHeight) {
+      hideChartHover();
+      return;
+    }
+
+    const monthFraction = ((mouseX - margin.left) / innerWidth) * (monthCount - 1);
+    const m = Math.round(Math.min(Math.max(monthFraction, 0), monthCount - 1));
+    const unitY = (margin.top + innerHeight - mouseY) / innerHeight;
+
+    // Nearest cycle by on-screen (unit-space) distance at this month —
+    // unit-space rather than raw dollars so "nearest" means the same
+    // thing visually in both linear and log mode, where a given pixel
+    // gap represents very different dollar gaps depending on the value.
+    let best = null;
+    let bestDist = Infinity;
+    cycles.forEach((c) => {
+      const d = Math.abs(mapper.toUnit(c.trajectory[m]) - unitY);
+      if (d < bestDist) {
+        bestDist = d;
+        best = c;
+      }
+    });
+    if (best) drawChartHover(best, m);
+  }
+
+  function hideChartHover() {
+    if (!lastChartSnapshot) return;
+    resultsCanvas.getContext('2d').putImageData(lastChartSnapshot, 0, 0);
+    chartTooltip.classList.add('hidden');
+  }
+
+  function drawChartHover(cycle, m) {
+    const ctx = resultsCanvas.getContext('2d');
+    ctx.putImageData(lastChartSnapshot, 0, 0);
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // putImageData ignores the transform — restore it for the draws below
+
+    const { margin, innerWidth, innerHeight, mapper, monthCount } = lastChartGeometry;
+    const xForMonth = (mm) => margin.left + (mm / (monthCount - 1)) * innerWidth;
+    const yForValue = (v) => margin.top + innerHeight - mapper.toUnit(v) * innerHeight;
+    const color = cycle.failed ? '#ffa9af' : '#90e58c';
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    cycle.trajectory.forEach((v, i) => {
+      const x = xForMonth(i);
+      const y = yForValue(v);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const hoverX = xForMonth(m);
+    const hoverY = yForValue(cycle.trajectory[m]);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.setLineDash([2, 2]);
+    ctx.beginPath();
+    ctx.moveTo(hoverX, margin.top);
+    ctx.lineTo(hoverX, margin.top + innerHeight);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(hoverX, hoverY, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#17191f';
+    ctx.stroke();
+
+    const yearsIn = (m / 12).toFixed(1);
+    chartTooltip.innerHTML = `
+      <div class="tooltip-start">Start: ${formatMonthKey(cycle.startKey)}</div>
+      <div class="tooltip-value">${formatDollars(cycle.trajectory[m])}</div>
+      <div class="tooltip-year">Year ${yearsIn} of retirement${cycle.failed ? ' · failed' : ''}</div>
+    `;
+    chartTooltip.classList.remove('hidden');
+
+    // Positioned relative to .results-canvas-card (the nearest positioned
+    // ancestor) via the canvas's own offset within it, so the chart
+    // controls row above the canvas is accounted for automatically.
+    let left = resultsCanvas.offsetLeft + hoverX + 12;
+    const top = resultsCanvas.offsetTop + hoverY - 12;
+    if (left + 160 > resultsCanvas.offsetLeft + margin.left + innerWidth) {
+      left = resultsCanvas.offsetLeft + hoverX - 172;
+    }
+    chartTooltip.style.left = left + 'px';
+    chartTooltip.style.top = Math.max(0, top) + 'px';
+  }
 
   function loadSeries(key, file) {
     const reader = new FileReader();
@@ -387,6 +516,7 @@
     };
 
     let failed = false;
+    let failedAtMonth = null;
 
     for (let m = 0; m < cycleMonths; m++) {
       if (m > 0) {
@@ -407,7 +537,10 @@
 
       const totalAfterWithdrawal = bucket.stock + bucket.bond + bucket.infl;
       trajectory[m + 1] = totalAfterWithdrawal;
-      if (totalAfterWithdrawal <= 0) failed = true;
+      if (totalAfterWithdrawal <= 0 && !failed) {
+        failed = true;
+        failedAtMonth = m; // first month it happened — matches timeline index startIdx + m
+      }
 
       if (config.rebalanceEveryMonths && (m + 1) % config.rebalanceEveryMonths === 0) {
         bucket.stock = (totalAfterWithdrawal * config.allocStock) / 100;
@@ -416,7 +549,7 @@
       }
     }
 
-    return { trajectory, endingBalance: trajectory[cycleMonths], failed };
+    return { trajectory, endingBalance: trajectory[cycleMonths], failed, failedAtMonth };
   }
 
   // Rolls the cycle start forward one month at a time — exactly the
@@ -441,7 +574,13 @@
 
     const cycles = [];
     for (let s = 0; s < numCycles; s++) {
-      cycles.push({ startKey: timeline.keys[s], ...simulateCycle(s, cycleMonths, fullTimeline, config) });
+      const result = simulateCycle(s, cycleMonths, fullTimeline, config);
+      // currentPriceIndex at loop iteration m is startIdx + m (see
+      // simulateCycle: growth for iteration m uses the return ending at
+      // that index, or — for m=0 — the start date itself), so the failure
+      // month's own calendar date is just that index into the timeline.
+      const failedKey = result.failedAtMonth !== null ? timeline.keys[s + result.failedAtMonth] : null;
+      cycles.push({ startKey: timeline.keys[s], failedKey, ...result });
     }
 
     return { cycles, cycleMonths, numCycles };
@@ -464,17 +603,111 @@
       </div>
     `;
 
+    const failedCycles = cycles.filter((c) => c.failed);
+    if (failedCycles.length) {
+      failureListTitleEl.textContent = `Failed cycles (${failedCycles.length}) — start date → date it went to $0 or below`;
+      failureListEl.innerHTML = failedCycles
+        .map((c) => `<div class="failure-list-item">${formatMonthKey(c.startKey)}<span class="arrow">→</span>${formatMonthKey(c.failedKey)}</div>`)
+        .join('');
+      failureListSection.classList.remove('hidden');
+    } else {
+      failureListSection.classList.add('hidden');
+    }
+
     resultsSection.classList.remove('hidden');
     lastRunCycles = cycles;
     lastRunYears = config.years;
     drawResultsChart(cycles, config.years);
   }
 
-  // Renders every cycle's trajectory as a semi-transparent line on one
-  // <canvas> (a plain raster draw, not per-point SVG/DOM elements) so a
-  // chart with dozens or hundreds of overlapping cycles stays fast and
-  // doesn't bloat the page with interactive chart machinery it doesn't
-  // need here — this view is a static image, not a hoverable chart.
+  const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function formatMonthKey(key) {
+    const [y, m] = key.split('-').map(Number);
+    return `${MONTH_NAMES[m - 1]} ${y}`;
+  }
+
+  // Builds the value <-> [0,1] mapping the chart draws against, in either
+  // linear or log mode — isolating the one real difference between the two
+  // (how a dollar value maps to a vertical position) so drawResultsChart
+  // and drawCycleDensity don't need to know which mode is active.
+  function buildYMapper(cycles, useLog) {
+    let yMin = 0;
+    let yMax = 0;
+    cycles.forEach((c) => c.trajectory.forEach((v) => {
+      if (v < yMin) yMin = v;
+      if (v > yMax) yMax = v;
+    }));
+
+    if (!useLog) {
+      const pad = (yMax - yMin) * 0.05 || 1;
+      const lo = yMin - pad;
+      const hi = yMax + pad;
+      const range = hi - lo || 1;
+      return {
+        log: false,
+        lo,
+        hi,
+        toUnit: (v) => (v - lo) / range,
+        ticks: (count) => {
+          const out = [];
+          for (let i = 0; i <= count; i++) out.push(lo + (i / count) * range);
+          return out;
+        },
+      };
+    }
+
+    // Log mode: $0 and negative balances have no position on a log axis.
+    // They're clamped to the smallest positive balance seen anywhere in
+    // the data, so a failed cycle's negative dip still shows — flattened
+    // into the bottom row — instead of silently vanishing.
+    let floor = Infinity;
+    cycles.forEach((c) => c.trajectory.forEach((v) => {
+      if (v > 0 && v < floor) floor = v;
+    }));
+    if (!isFinite(floor)) floor = 1; // degenerate case: every cycle started at/below $0
+    const hi = Math.max(yMax * 1.05, floor * 10);
+    const logLo = Math.log10(floor);
+    const logHi = Math.log10(hi);
+    const range = logHi - logLo || 1;
+    return {
+      log: true,
+      lo: floor,
+      hi,
+      toUnit: (v) => (Math.log10(Math.max(v, floor)) - logLo) / range,
+      ticks: (count) => logTickValues(floor, hi, count),
+    };
+  }
+
+  // Nice 1/2/5-per-decade log tick values (plain powers of ten alone would
+  // skip straight from, say, $1M to $10M with nothing in between) —
+  // coarsens to fewer steps per decade as the domain spans more of them,
+  // so a wide range doesn't produce an unreadable wall of labels.
+  function logTickValues(lo, hi, maxTicks) {
+    if (!(lo > 0) || !(hi > lo)) return [lo, hi];
+    const decades = Math.log10(hi / lo);
+    const tiers = [[1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 5], [1, 5], [1]];
+    const startTier = decades > 4 ? 2 : decades > 1.5 ? 1 : 0;
+    const startExp = Math.floor(Math.log10(lo));
+    const endExp = Math.ceil(Math.log10(hi));
+    for (let tier = startTier; tier < tiers.length; tier++) {
+      const ticks = [];
+      for (let exp = startExp; exp <= endExp; exp++) {
+        for (const m of tiers[tier]) {
+          const v = m * Math.pow(10, exp);
+          if (v >= lo && v <= hi) ticks.push(v);
+        }
+      }
+      if (ticks.length <= maxTicks || tier === tiers.length - 1) return ticks;
+    }
+    return [];
+  }
+
+  // Renders cycle density as one <canvas> raster (not per-point SVG/DOM
+  // elements) so a chart with hundreds or thousands of overlapping cycles
+  // stays fast and doesn't bloat the page with interactive chart machinery
+  // it doesn't need here — this view is a static image, not a hoverable
+  // chart.
   function drawResultsChart(cycles, years) {
     const dpr = window.devicePixelRatio || 1;
     const cssWidth = resultsCanvas.parentElement.clientWidth - 16;
@@ -494,18 +727,10 @@
     ctx.fillRect(0, 0, cssWidth, cssHeight);
     if (innerWidth <= 0 || innerHeight <= 0) return;
 
-    let yMin = 0;
-    let yMax = 0;
-    cycles.forEach((c) => c.trajectory.forEach((v) => {
-      if (v < yMin) yMin = v;
-      if (v > yMax) yMax = v;
-    }));
-    const yPad = (yMax - yMin) * 0.05 || 1;
-    yMin -= yPad;
-    yMax += yPad;
-
+    const useLog = chartLogToggle.checked;
+    const mapper = buildYMapper(cycles, useLog);
     const xForMonth = (m) => margin.left + (m / (cycles[0].trajectory.length - 1)) * innerWidth;
-    const yForValue = (v) => margin.top + innerHeight - ((v - yMin) / (yMax - yMin)) * innerHeight;
+    const yForValue = (v) => margin.top + innerHeight - mapper.toUnit(v) * innerHeight;
 
     // Gridlines + Y axis labels
     const yTickCount = Math.max(3, Math.floor(innerHeight / 50));
@@ -514,15 +739,14 @@
     ctx.font = '11px "Google Sans", Roboto, Arial, sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    for (let i = 0; i <= yTickCount; i++) {
-      const v = yMin + (i / yTickCount) * (yMax - yMin);
+    mapper.ticks(yTickCount).forEach((v) => {
       const y = yForValue(v);
       ctx.beginPath();
       ctx.moveTo(margin.left, y);
       ctx.lineTo(margin.left + innerWidth, y);
       ctx.stroke();
       ctx.fillText(formatDollarsCompact(v), margin.left - 8, y);
-    }
+    });
 
     // X axis labels (years into retirement)
     const xTickCount = Math.min(years, Math.max(2, Math.floor(innerWidth / 70)));
@@ -535,17 +759,27 @@
     }
     ctx.fillText('Years into retirement', margin.left + innerWidth / 2, margin.top + innerHeight + 22);
 
-    drawCycleDensity(ctx, cycles, margin, innerWidth, innerHeight, yMin, yMax);
+    drawCycleDensity(ctx, cycles, margin, innerWidth, innerHeight, mapper);
 
-    // Zero reference line — the failure threshold — drawn on top of the
-    // density fill so it stays legible regardless of what's under it.
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath();
-    ctx.moveTo(margin.left, yForValue(0));
-    ctx.lineTo(margin.left + innerWidth, yForValue(0));
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // Zero reference line — the failure threshold. Only meaningful in
+    // linear mode; log mode has no position for $0 (see buildYMapper),
+    // so it's skipped there in favor of the note next to the toggle.
+    if (!useLog) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(margin.left, yForValue(0));
+      ctx.lineTo(margin.left + innerWidth, yForValue(0));
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Snapshot the finished base chart (pre-hover) and remember the
+    // geometry/data hover needs, so hovering is just a cheap restore +
+    // overlay instead of a full re-render (or worse, re-binning density).
+    lastChartSnapshot = ctx.getImageData(0, 0, resultsCanvas.width, resultsCanvas.height);
+    lastChartGeometry = { margin, innerWidth, innerHeight, mapper, monthCount: cycles[0].trajectory.length, cycles };
+    chartTooltip.classList.add('hidden');
   }
 
   // Plots cycle density rather than individual strokes: with hundreds or
@@ -561,17 +795,16 @@
   // construction, so a single global peak would make every later, more
   // spread-out month look faint by comparison. Per-month normalization
   // keeps each point in time independently readable.
-  function drawCycleDensity(ctx, cycles, margin, innerWidth, innerHeight, yMin, yMax) {
+  function drawCycleDensity(ctx, cycles, margin, innerWidth, innerHeight, mapper) {
     const monthCount = cycles[0].trajectory.length;
     const yBins = Math.max(20, Math.min(220, Math.round(innerHeight / 3)));
     const survivedCounts = new Uint32Array(monthCount * yBins);
     const failedCounts = new Uint32Array(monthCount * yBins);
 
-    const yRange = yMax - yMin || 1;
     cycles.forEach((c) => {
       const counts = c.failed ? failedCounts : survivedCounts;
       c.trajectory.forEach((v, m) => {
-        let bin = Math.floor(((v - yMin) / yRange) * yBins);
+        let bin = Math.floor(mapper.toUnit(v) * yBins);
         if (bin < 0) bin = 0;
         if (bin >= yBins) bin = yBins - 1;
         counts[m * yBins + bin]++;
