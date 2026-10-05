@@ -292,6 +292,35 @@ body {
   color: var(--down);
 }
 
+.rebalance-field {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.rebalance-field label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.rebalance-field select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 4px;
+  padding: 7px 10px;
+}
+
+.rebalance-field select:focus {
+  outline: 1px solid var(--accent);
+}
+
 .run-row {
   grid-column: 1 / -1;
   display: flex;
@@ -324,6 +353,51 @@ body {
 
 .run-status.ready {
   color: var(--up);
+}
+
+.run-status.error {
+  color: var(--down);
+}
+
+.results-section {
+  margin-top: 36px;
+}
+
+.results-stats {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.results-stats .headline {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.results-stats .success-rate {
+  font-weight: 600;
+}
+
+.results-stats .success-rate.good {
+  color: var(--up);
+}
+
+.results-stats .success-rate.bad {
+  color: var(--down);
+}
+
+.results-canvas-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 16px 8px;
+}
+
+.results-canvas {
+  display: block;
+  width: 100%;
 }
 
 @media (max-width: 600px) {

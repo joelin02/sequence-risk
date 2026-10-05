@@ -115,13 +115,32 @@
           </div>
 
           <div class="alloc-total" id="alloc-total">Total: 100%</div>
+
+          <div class="rebalance-field">
+            <label for="rebalance-freq">Rebalancing</label>
+            <select id="rebalance-freq">
+              <option value="1">Monthly</option>
+              <option value="3">Quarterly</option>
+              <option value="6">Semi-Annually</option>
+              <option value="12" selected>Annually</option>
+              <option value="0">No Rebalancing (Buy &amp; Hold)</option>
+            </select>
+          </div>
         </fieldset>
 
         <div class="run-row">
-          <button type="button" class="run-button" id="run-backtest" disabled>Run Backtest — coming soon</button>
+          <button type="button" class="run-button" id="run-backtest" disabled>Run Backtest</button>
           <div class="run-status" id="run-status">Load all three datasets to continue.</div>
         </div>
       </form>
+    </section>
+
+    <section class="results-section hidden" id="results-section">
+      <h2 class="section-title">3. Results</h2>
+      <div class="results-stats" id="results-stats"></div>
+      <div class="results-canvas-card">
+        <canvas id="results-canvas" class="results-canvas"></canvas>
+      </div>
     </section>
   </div>
 
