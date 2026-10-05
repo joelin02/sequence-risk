@@ -535,7 +535,10 @@
     }
     ctx.fillText('Years into retirement', margin.left + innerWidth / 2, margin.top + innerHeight + 22);
 
-    // Zero reference line — the failure threshold
+    drawCycleDensity(ctx, cycles, margin, innerWidth, innerHeight, yMin, yMax);
+
+    // Zero reference line — the failure threshold — drawn on top of the
+    // density fill so it stays legible regardless of what's under it.
     ctx.strokeStyle = 'rgba(255,255,255,0.35)';
     ctx.setLineDash([3, 3]);
     ctx.beginPath();
@@ -543,22 +546,73 @@
     ctx.lineTo(margin.left + innerWidth, yForValue(0));
     ctx.stroke();
     ctx.setLineDash([]);
+  }
 
-    // One line per cycle — green if it survived, red (down) if it failed —
-    // drawn at low opacity so the overlapping density itself shows where
-    // most cycles tend to land.
+  // Plots cycle density rather than individual strokes: with hundreds or
+  // thousands of overlapping cycles, stacking semi-transparent lines
+  // either washes out to a flat blob wherever many lines cross the same
+  // few pixels, or stays too faint to read where they don't — it doesn't
+  // actually scale as a way to *see* density. This bins every trajectory
+  // into a month x value-bucket grid instead (counted separately for
+  // survived vs failed cycles) and paints each bin's own color — a blend
+  // of green/red by its survived/failed mix, at an intensity reflecting
+  // how crowded that bin is relative to the *other bins in the same
+  // month* (not the whole grid): month 0 is identical for every cycle by
+  // construction, so a single global peak would make every later, more
+  // spread-out month look faint by comparison. Per-month normalization
+  // keeps each point in time independently readable.
+  function drawCycleDensity(ctx, cycles, margin, innerWidth, innerHeight, yMin, yMax) {
+    const monthCount = cycles[0].trajectory.length;
+    const yBins = Math.max(20, Math.min(220, Math.round(innerHeight / 3)));
+    const survivedCounts = new Uint32Array(monthCount * yBins);
+    const failedCounts = new Uint32Array(monthCount * yBins);
+
+    const yRange = yMax - yMin || 1;
     cycles.forEach((c) => {
-      ctx.strokeStyle = c.failed ? 'rgba(255, 169, 175, 0.45)' : 'rgba(144, 229, 140, 0.35)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
+      const counts = c.failed ? failedCounts : survivedCounts;
       c.trajectory.forEach((v, m) => {
-        const x = xForMonth(m);
-        const y = yForValue(v);
-        if (m === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        let bin = Math.floor(((v - yMin) / yRange) * yBins);
+        if (bin < 0) bin = 0;
+        if (bin >= yBins) bin = yBins - 1;
+        counts[m * yBins + bin]++;
       });
-      ctx.stroke();
     });
+
+    const colWidth = innerWidth / monthCount;
+    const rowHeight = innerHeight / yBins;
+    const MIN_ALPHA = 0.1; // even a lone outlier cycle stays visible, just faint
+    const GAMMA = 0.5; // compresses the dynamic range so moderately-dense bins don't look empty next to the single densest one
+    const GREEN = [144, 229, 140];
+    const RED = [255, 169, 175];
+
+    for (let m = 0; m < monthCount; m++) {
+      let colMax = 0;
+      for (let b = 0; b < yBins; b++) {
+        const total = survivedCounts[m * yBins + b] + failedCounts[m * yBins + b];
+        if (total > colMax) colMax = total;
+      }
+      if (colMax === 0) continue;
+
+      for (let b = 0; b < yBins; b++) {
+        const s = survivedCounts[m * yBins + b];
+        const f = failedCounts[m * yBins + b];
+        const total = s + f;
+        if (total === 0) continue;
+
+        const failedRatio = f / total;
+        const r = Math.round(GREEN[0] + (RED[0] - GREEN[0]) * failedRatio);
+        const g = Math.round(GREEN[1] + (RED[1] - GREEN[1]) * failedRatio);
+        const bl = Math.round(GREEN[2] + (RED[2] - GREEN[2]) * failedRatio);
+        const alpha = MIN_ALPHA + (1 - MIN_ALPHA) * Math.pow(total / colMax, GAMMA);
+
+        ctx.fillStyle = `rgba(${r},${g},${bl},${alpha.toFixed(3)})`;
+        const x = margin.left + m * colWidth;
+        const y = margin.top + innerHeight - (b + 1) * rowHeight;
+        // Slight horizontal overlap (+1px) avoids sub-pixel seams between
+        // adjacent month columns at non-integer scale factors.
+        ctx.fillRect(x, y, colWidth + 1, rowHeight + 0.5);
+      }
+    }
   }
 
   function formatDollars(value) {
