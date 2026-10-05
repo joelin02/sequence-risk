@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Sequence Risk</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <h1>Sequence Risk</h1>
+      <p class="subtitle">
+        Test whether a retirement portfolio would have survived real historical market
+        conditions. Load historical stock, bond, and inflation data, then describe your
+        portfolio below.
+      </p>
+    </header>
+
+    <section class="data-section">
+      <h2 class="section-title">1. Load historical data</h2>
+      <div class="upload-row">
+        <label class="file-upload data-stock">
+          <input type="file" id="csv-stock" accept=".csv,text/csv">
+          <span id="label-stock">Load stock data</span>
+        </label>
+        <label class="file-upload data-bond">
+          <input type="file" id="csv-bond" accept=".csv,text/csv">
+          <span id="label-bond">Load bond data</span>
+        </label>
+        <label class="file-upload data-inflation">
+          <input type="file" id="csv-inflation" accept=".csv,text/csv">
+          <span id="label-inflation">Load inflation data</span>
+        </label>
+      </div>
+
+      <div class="data-status">
+        <div class="data-card data-stock hidden" id="status-stock">
+          <div class="data-card-header">
+            <span class="data-swatch"></span>
+            <span class="data-card-title">Stocks</span>
+            <span class="data-card-filename" id="status-stock-name"></span>
+          </div>
+          <div class="data-card-range" id="status-stock-range"></div>
+        </div>
+        <div class="data-card data-bond hidden" id="status-bond">
+          <div class="data-card-header">
+            <span class="data-swatch"></span>
+            <span class="data-card-title">Bonds</span>
+            <span class="data-card-filename" id="status-bond-name"></span>
+          </div>
+          <div class="data-card-range" id="status-bond-range"></div>
+        </div>
+        <div class="data-card data-inflation hidden" id="status-inflation">
+          <div class="data-card-header">
+            <span class="data-swatch"></span>
+            <span class="data-card-title">Inflation</span>
+            <span class="data-card-filename" id="status-inflation-name"></span>
+          </div>
+          <div class="data-card-range" id="status-inflation-range"></div>
+        </div>
+      </div>
+
+      <div class="common-range hidden" id="common-range"></div>
+    </section>
+
+    <section class="config-section">
+      <h2 class="section-title">2. Configure your portfolio</h2>
+      <form class="config-form" id="config-form">
+        <div class="field">
+          <label for="initial-portfolio">Initial portfolio size</label>
+          <div class="field-input prefix-dollar">
+            <input type="number" id="initial-portfolio" min="0" step="1000" placeholder="1,000,000">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="years-retirement">Years in retirement</label>
+          <input type="number" id="years-retirement" min="1" step="1" placeholder="30">
+        </div>
+
+        <div class="field field-wide">
+          <label for="annual-spending">Annual spending, in today's dollars (adjusted for inflation each year of the backtest)</label>
+          <div class="field-input prefix-dollar">
+            <input type="number" id="annual-spending" min="0" step="1000" placeholder="40,000">
+          </div>
+        </div>
+
+        <div class="field field-wide">
+          <label for="real-yield">Real yield on inflation-adjusted bonds, APY (can be negative)</label>
+          <div class="field-input suffix-percent">
+            <input type="number" id="real-yield" step="0.1" value="0">
+          </div>
+        </div>
+
+        <fieldset class="allocation">
+          <legend>Portfolio allocation</legend>
+
+          <div class="alloc-field">
+            <span class="data-swatch data-stock"></span>
+            <label for="alloc-stock">Stocks</label>
+            <div class="field-input suffix-percent"><input type="number" id="alloc-stock" min="0" max="100" step="1" value="70"></div>
+          </div>
+
+          <div class="alloc-field">
+            <span class="data-swatch data-bond"></span>
+            <label for="alloc-bond">Bonds</label>
+            <div class="field-input suffix-percent"><input type="number" id="alloc-bond" min="0" max="100" step="1" value="15"></div>
+          </div>
+
+          <div class="alloc-field">
+            <span class="data-swatch data-inflation"></span>
+            <label for="alloc-inflation">Inflation-adjusted bonds</label>
+            <div class="field-input suffix-percent"><input type="number" id="alloc-inflation" min="0" max="100" step="1" value="15"></div>
+          </div>
+
+          <div class="alloc-total" id="alloc-total">Total: 100%</div>
+        </fieldset>
+
+        <div class="run-row">
+          <button type="button" class="run-button" id="run-backtest" disabled>Run Backtest — coming soon</button>
+          <div class="run-status" id="run-status">Load all three datasets to continue.</div>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

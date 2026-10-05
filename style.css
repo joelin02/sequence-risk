@@ -1,0 +1,336 @@
+:root {
+  --bg: #101218;
+  --surface: #17191f;
+  --border: #2c2f38;
+  --text-primary: #e6e8f0;
+  --text-secondary: #adafb8;
+  --up: #90e58c;
+  --down: #ffa9af;
+  --accent: #8ab4f8;
+  /* Same convention as the chart app: stocks green, bonds blue, the third
+     slot purple — here it's the inflation data (and, downstream, the
+     synthetic inflation-adjusted bond series derived from it). */
+  --series-stock: #90e58c;
+  --series-bond: #8ab4f8;
+  --series-inflation: #c792ea;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: "Google Sans", Roboto, Arial, sans-serif;
+}
+
+.page {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 500;
+  margin: 0 0 12px;
+}
+
+.subtitle {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 640px;
+  margin: 0 0 32px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 16px;
+  color: var(--text-primary);
+}
+
+.data-section {
+  margin-bottom: 36px;
+}
+
+.upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.file-upload input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.file-upload span {
+  display: inline-block;
+  padding: 8px 20px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.file-upload.data-stock span { border-color: var(--series-stock); color: var(--series-stock); }
+.file-upload.data-stock span:hover { background: rgba(144, 229, 140, 0.1); }
+.file-upload.data-bond span { border-color: var(--series-bond); color: var(--series-bond); }
+.file-upload.data-bond span:hover { background: rgba(138, 180, 248, 0.1); }
+.file-upload.data-inflation span { border-color: var(--series-inflation); color: var(--series-inflation); }
+.file-upload.data-inflation span:hover { background: rgba(199, 146, 234, 0.1); }
+
+.file-upload.data-stock span.loaded { background: rgba(144, 229, 140, 0.18); }
+.file-upload.data-bond span.loaded { background: rgba(138, 180, 248, 0.18); }
+.file-upload.data-inflation span.loaded { background: rgba(199, 146, 234, 0.18); }
+
+.data-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.data-card {
+  flex: 1 1 220px;
+  min-width: 200px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border-left: 3px solid var(--card-color, var(--text-secondary));
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.data-card.data-stock { --card-color: var(--series-stock); }
+.data-card.data-bond { --card-color: var(--series-bond); }
+.data-card.data-inflation { --card-color: var(--series-inflation); }
+
+.data-card-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+
+.data-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--card-color, var(--text-secondary));
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.data-swatch.data-stock { --card-color: var(--series-stock); }
+.data-swatch.data-bond { --card-color: var(--series-bond); }
+.data-swatch.data-inflation { --card-color: var(--series-inflation); }
+
+.data-card-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.data-card-filename {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.data-card-range {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.common-range {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: rgba(138, 180, 248, 0.08);
+  border: 1px solid rgba(138, 180, 248, 0.25);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.common-range.invalid {
+  background: rgba(255, 169, 175, 0.08);
+  border-color: rgba(255, 169, 175, 0.3);
+  color: var(--down);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.config-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 24px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.field label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.field input[type="number"] {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 4px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.field input[type="number"]:focus {
+  outline: 1px solid var(--accent);
+}
+
+.field-input {
+  position: relative;
+}
+
+.field-input.prefix-dollar input {
+  padding-left: 22px;
+}
+
+.field-input.prefix-dollar::before {
+  content: "$";
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.field-input.suffix-percent input {
+  padding-right: 26px;
+}
+
+.field-input.suffix-percent::after {
+  content: "%";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.allocation {
+  grid-column: 1 / -1;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  align-items: end;
+}
+
+.allocation legend {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 0 4px;
+}
+
+.alloc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alloc-field label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.alloc-total {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--up);
+}
+
+.alloc-total.invalid {
+  color: var(--down);
+}
+
+.run-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.run-button {
+  padding: 10px 24px;
+  border-radius: 4px;
+  background: var(--border);
+  color: var(--text-secondary);
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: not-allowed;
+}
+
+.run-button:not(:disabled) {
+  background: var(--accent);
+  color: #101218;
+  cursor: pointer;
+}
+
+.run-status {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.run-status.ready {
+  color: var(--up);
+}
+
+@media (max-width: 600px) {
+  .config-form {
+    grid-template-columns: 1fr;
+  }
+  .allocation {
+    grid-template-columns: 1fr;
+  }
+}
