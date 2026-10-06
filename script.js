@@ -71,21 +71,37 @@
   let lastChartSnapshot = null;
   let lastChartGeometry = null;
 
+  // While Shift is held, the cycle picked at the moment it was first held
+  // down stays selected regardless of where the cursor moves afterward —
+  // only which month is highlighted keeps tracking the cursor's X. That's
+  // what lets you scrub left/right across one line's entire 30-year
+  // history instead of it jumping to whichever line is nearest on every
+  // move. Releasing Shift (or leaving the chart) clears it.
+  let lockedCycle = null;
+
   chartLogToggle.addEventListener('change', () => {
     logScaleNoteEl.classList.toggle('hidden', !chartLogToggle.checked);
     if (lastRunCycles) drawResultsChart(lastRunCycles, lastRunYears);
   });
 
-  resultsCanvas.addEventListener('mousemove', (e) => handleChartHover(e.clientX, e.clientY));
-  resultsCanvas.addEventListener('mouseleave', hideChartHover);
+  resultsCanvas.addEventListener('mousemove', (e) => handleChartHover(e.clientX, e.clientY, e.shiftKey));
+  resultsCanvas.addEventListener('mouseleave', () => {
+    lockedCycle = null;
+    hideChartHover();
+  });
   resultsCanvas.addEventListener('touchmove', (e) => {
     if (e.touches.length !== 1) return;
-    handleChartHover(e.touches[0].clientX, e.touches[0].clientY);
+    handleChartHover(e.touches[0].clientX, e.touches[0].clientY, e.touches[0].shiftKey);
   }, { passive: true });
-  resultsCanvas.addEventListener('touchend', hideChartHover);
+  resultsCanvas.addEventListener('touchend', () => {
+    lockedCycle = null;
+    hideChartHover();
+  });
 
-  function handleChartHover(clientX, clientY) {
+  function handleChartHover(clientX, clientY, shiftKey) {
     if (!lastChartGeometry || !lastChartSnapshot) return;
+    if (!shiftKey) lockedCycle = null; // Shift released (or never held) — always track the nearest line
+
     const rect = resultsCanvas.getBoundingClientRect();
     const mouseX = clientX - rect.left;
     const mouseY = clientY - rect.top;
@@ -98,22 +114,26 @@
 
     const monthFraction = ((mouseX - margin.left) / innerWidth) * (monthCount - 1);
     const m = Math.round(Math.min(Math.max(monthFraction, 0), monthCount - 1));
-    const unitY = (margin.top + innerHeight - mouseY) / innerHeight;
 
-    // Nearest cycle by on-screen (unit-space) distance at this month —
-    // unit-space rather than raw dollars so "nearest" means the same
-    // thing visually in both linear and log mode, where a given pixel
-    // gap represents very different dollar gaps depending on the value.
-    let best = null;
-    let bestDist = Infinity;
-    cycles.forEach((c) => {
-      const d = Math.abs(mapper.toUnit(c.trajectory[m]) - unitY);
-      if (d < bestDist) {
-        bestDist = d;
-        best = c;
-      }
-    });
-    if (best) drawChartHover(best, m);
+    let best = lockedCycle;
+    if (!best) {
+      // Nearest cycle by on-screen (unit-space) distance at this month —
+      // unit-space rather than raw dollars so "nearest" means the same
+      // thing visually in both linear and log mode, where a given pixel
+      // gap represents very different dollar gaps depending on the value.
+      const unitY = (margin.top + innerHeight - mouseY) / innerHeight;
+      let bestDist = Infinity;
+      cycles.forEach((c) => {
+        const d = Math.abs(mapper.toUnit(c.trajectory[m]) - unitY);
+        if (d < bestDist) {
+          bestDist = d;
+          best = c;
+        }
+      });
+      if (shiftKey) lockedCycle = best; // lock onto whichever line we just landed on
+    }
+
+    if (best) drawChartHover(best, m, !!lockedCycle);
   }
 
   function hideChartHover() {
@@ -122,7 +142,7 @@
     chartTooltip.classList.add('hidden');
   }
 
-  function drawChartHover(cycle, m) {
+  function drawChartHover(cycle, m, locked) {
     const ctx = resultsCanvas.getContext('2d');
     ctx.putImageData(lastChartSnapshot, 0, 0);
     const dpr = window.devicePixelRatio || 1;
@@ -134,9 +154,9 @@
     const color = cycle.failed ? '#ffa9af' : '#90e58c';
 
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = 'rgba(0,0,0,0.6)';
-    ctx.shadowBlur = 4;
+    ctx.lineWidth = locked ? 3 : 2.5;
+    ctx.shadowColor = locked ? 'rgba(138,180,248,0.8)' : 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = locked ? 6 : 4;
     ctx.beginPath();
     cycle.trajectory.forEach((v, i) => {
       const x = xForMonth(i);
@@ -150,7 +170,7 @@
     const hoverX = xForMonth(m);
     const hoverY = yForValue(cycle.trajectory[m]);
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.strokeStyle = locked ? 'rgba(138,180,248,0.6)' : 'rgba(255,255,255,0.4)';
     ctx.setLineDash([2, 2]);
     ctx.beginPath();
     ctx.moveTo(hoverX, margin.top);
@@ -171,6 +191,7 @@
       <div class="tooltip-start">Start: ${formatMonthKey(cycle.startKey)}</div>
       <div class="tooltip-value">${formatDollars(cycle.trajectory[m])}</div>
       <div class="tooltip-year">Year ${yearsIn} of retirement${cycle.failed ? ' · failed' : ''}</div>
+      ${locked ? '<div class="tooltip-locked">🔒 Locked — release Shift to browse</div>' : ''}
     `;
     chartTooltip.classList.remove('hidden');
 
@@ -779,6 +800,7 @@
     // overlay instead of a full re-render (or worse, re-binning density).
     lastChartSnapshot = ctx.getImageData(0, 0, resultsCanvas.width, resultsCanvas.height);
     lastChartGeometry = { margin, innerWidth, innerHeight, mapper, monthCount: cycles[0].trajectory.length, cycles };
+    lockedCycle = null;
     chartTooltip.classList.add('hidden');
   }
 

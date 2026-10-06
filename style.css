@@ -421,6 +421,14 @@ body {
   color: var(--text-secondary);
 }
 
+.chart-tooltip .tooltip-locked {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 11px;
+}
+
 .chart-controls {
   display: flex;
   align-items: center;
@@ -485,6 +493,20 @@ body {
   font-size: 12px;
   color: var(--text-secondary);
   font-style: italic;
+}
+
+.hover-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.hover-hint kbd {
+  font-family: inherit;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .results-canvas {
