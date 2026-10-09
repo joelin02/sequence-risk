@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guide · Sequence Risk</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="page guide">
+    <header class="header">
+      <p class="guide-link-row"><a class="guide-link" href="index.html">← Back to the backtester</a></p>
+      <h1>Guide to Sequence Risk</h1>
+      <p class="subtitle">
+        What sequence risk is, how this backtester measures it, and how to read
+        everything it shows you.
+      </p>
+    </header>
+
+    <nav class="guide-toc">
+      <ol>
+        <li><a href="#concept">What sequence risk is</a></li>
+        <li><a href="#data">Preparing your data</a></li>
+        <li><a href="#config">Configuring your portfolio</a></li>
+        <li><a href="#engine">How the backtest works</a></li>
+        <li><a href="#results">Reading the results</a></li>
+        <li><a href="#detail">Month-by-month detail and CSV export</a></li>
+        <li><a href="#limits">What this can and can't tell you</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="concept">1. What sequence risk is</h2>
+    <p>
+      While you are saving, the order your returns arrive in doesn't matter. A bad
+      decade followed by a good one leaves you in exactly the same place as a good
+      decade followed by a bad one, because multiplication doesn't care about order.
+    </p>
+    <p>
+      That stops being true the moment you start withdrawing. Every withdrawal made
+      while prices are low sells more of the portfolio to raise the same dollars,
+      and what was sold isn't there to recover when prices come back.
+      <strong>Sequence risk</strong> (or sequence-of-returns risk) is the danger
+      that the bad years land early in retirement, when the portfolio is at its
+      largest and has the most years of withdrawals still ahead of it.
+    </p>
+    <p>
+      The illustration below uses made-up numbers to isolate the effect. Two
+      retirees each start with <span id="ex-start"></span> and withdraw
+      <span id="ex-spend"></span> a year for <span id="ex-years"></span> years.
+      They earn exactly the same set of yearly returns, with the same average.
+      The only difference is the order: one gets the weak years first, the other
+      gets the same years in reverse.
+    </p>
+
+    <figure class="figure">
+      <div class="figure-legend">
+        <span style="--key: var(--up)">Strong years first</span>
+        <span style="--key: var(--down)">Weak years first</span>
+      </div>
+      <svg id="ex-chart" viewBox="0 0 720 320" role="img" aria-label="Portfolio value over time for the same returns in two different orders"></svg>
+      <figcaption id="ex-caption"></figcaption>
+    </figure>
+
+    <p>
+      This is why a single average return is a poor guide to whether a retirement
+      plan works. What matters is what happens in the first ten years or so. The
+      backtester answers the question directly: it takes your plan and starts it
+      in every month of history you give it, so you can see how many starting
+      points would have survived and which ones would not.
+    </p>
+
+    <h2 id="data">2. Preparing your data</h2>
+    <p>You load three CSV files. Each has two columns, a date and a value:</p>
+    <pre>Date,Value
+1987-01-31,274.08
+1987-02-28,284.20
+1987-03-31,291.70</pre>
+    <ul>
+      <li><strong>Stocks:</strong> a stock index level. Use a total-return index (dividends reinvested) if you can; a price-only index understates returns.</li>
+      <li><strong>Bonds:</strong> a bond index level, again ideally total-return.</li>
+      <li><strong>Inflation:</strong> a price index such as CPI. This is the index level itself, not a yearly percentage rate.</li>
+    </ul>
+    <h3>Format rules</h3>
+    <ul>
+      <li>A header row is optional; it is skipped automatically.</li>
+      <li>Dates like <code>1987-01-31</code> are the safest. Other formats your browser can parse usually work too.</li>
+      <li>Values should be plain numbers with no thousands separators (<code>1234.5</code>, not <code>1,234.5</code>).</li>
+      <li>The backtest runs monthly. If a file has several rows in one calendar month (daily or weekly data), the last one in that month is used.</li>
+      <li>The day of the month doesn't need to match between files. Rows are matched by year and month.</li>
+      <li>There can be no missing months inside the overlapping period. If there is a gap, the app tells you where it is instead of running.</li>
+    </ul>
+    <p>
+      Only the period covered by all three files is used. After loading, the
+      <strong>Common backtest range</strong> line shows that period. It needs to
+      be longer than the retirement you want to test, and the longer it is, the
+      more starting points you get.
+    </p>
+
+    <h2 id="config">3. Configuring your portfolio</h2>
+    <div class="guide-table-scroll">
+      <table class="guide-table">
+        <tr><th>Field</th><th>What it means</th></tr>
+        <tr><td>Initial portfolio size</td><td>What you retire with, in dollars.</td></tr>
+        <tr><td>Years in retirement</td><td>How long the money has to last. Each tested period is exactly this long.</td></tr>
+        <tr><td>Annual spending</td><td>What you withdraw in the first year. One twelfth is taken each month, and the amount rises every month in step with the inflation index, so your buying power stays constant.</td></tr>
+        <tr><td>Real yield on inflation-adjusted bonds</td><td>The yearly return above inflation for the third asset (see below). It can be zero or negative.</td></tr>
+        <tr><td>Portfolio allocation</td><td>The split between stocks, bonds, and inflation-adjusted bonds. It must total 100%.</td></tr>
+        <tr><td>Rebalancing</td><td>How often the portfolio is reset to that split. With "No Rebalancing" the split drifts as the assets grow at different rates.</td></tr>
+      </table>
+    </div>
+    <h3>The inflation-adjusted bond</h3>
+    <p>
+      The third asset isn't loaded from a file. It is built from your inflation
+      data: each month it grows by that month's inflation plus one month's worth
+      of the real yield you entered. It behaves like an inflation-protected bond
+      held to maturity, with no price swings of its own. At a real yield of 0% it
+      exactly keeps pace with inflation.
+    </p>
+
+    <h2 id="engine">4. How the backtest works</h2>
+    <p>
+      A <strong>cycle</strong> is one complete retirement starting in a particular
+      month of history. The backtest runs one cycle for every possible starting
+      month: the first month of your data, then the second, and so on until a full
+      retirement no longer fits. With 60 years of data and a 30-year retirement,
+      that is about 360 cycles.
+    </p>
+    <p>Within a cycle, each month goes through the same steps in the same order:</p>
+
+    <div class="figure">
+      <div class="step-flow">
+        <div class="step"><span class="step-num">Step 1</span><b>Grow</b><span>Each asset's balance changes by that asset's own return for the month.</span></div>
+        <div class="step"><span class="step-num">Step 2</span><b>Inflate spending</b><span>The monthly withdrawal rises by that month's inflation.</span></div>
+        <div class="step"><span class="step-num">Step 3</span><b>Withdraw</b><span>Spending is taken from each asset in proportion to its share.</span></div>
+        <div class="step"><span class="step-num">Step 4</span><b>Rebalance</b><span>If this is a rebalancing month, reset to the target split.</span></div>
+      </div>
+      <div class="figure-caption">
+        The very first month is the exception: there is no growth or inflation
+        yet, just the first withdrawal from the starting balance.
+      </div>
+    </div>
+
+    <p>
+      A cycle <strong>fails</strong> if its total value reaches $0 or below at any
+      point before the end. The calculation keeps going after that, so a failed
+      cycle shows a negative balance. Read that as how far short the plan fell,
+      not as money you could actually have borrowed.
+    </p>
+
+    <h2 id="results">5. Reading the results</h2>
+    <h3>The summary</h3>
+    <p>
+      The text above the chart gives the number of cycles tested, the lowest,
+      highest, and average ending balance, and the <strong>success rate</strong>:
+      the share of cycles that never ran out.
+    </p>
+    <h3>The chart</h3>
+    <p>
+      The horizontal axis is years into retirement and the vertical axis is
+      portfolio value. With hundreds of cycles, drawing every line would be an
+      unreadable tangle, so the chart shows density instead:
+    </p>
+    <ul>
+      <li><strong>Brightness</strong> shows how many cycles had that balance at that point in retirement. Bright bands are where most outcomes cluster; faint areas are rare outcomes.</li>
+      <li><strong>Color</strong> shows how those cycles ended. Green means they survived, red means they eventually failed, and shades in between are a mix.</li>
+      <li>The <strong>dashed line</strong> is $0, the failure threshold.</li>
+    </ul>
+    <p>
+      Turn on <strong>Log scale</strong> to spread out the lower balances when a
+      few very large outcomes squash everything else toward the bottom. A log
+      axis has no place for zero or negative values, so failed cycles are
+      flattened onto the bottom edge in that mode.
+    </p>
+    <h3>Exploring individual cycles</h3>
+    <ul>
+      <li><strong>Hover</strong> over the chart to highlight the nearest cycle. The tooltip shows its start date, its balance at that point, and how far into retirement you are.</li>
+      <li><strong>Hold Shift</strong> to lock onto the highlighted cycle. You can then move left and right along its whole history without the highlight jumping to a neighbor.</li>
+      <li><strong>Click</strong> to pin a cycle. It stays drawn in blue and its month-by-month table opens below the chart.</li>
+    </ul>
+    <h3>The failed cycles list</h3>
+    <p>
+      Below the chart, every failed cycle is listed with its start date and the
+      month it ran out. Click an entry to open that cycle's month-by-month table.
+      Start dates that cluster together point to the stretch of history your plan
+      is most exposed to. Click the panel's header to minimize or expand it.
+    </p>
+
+    <h2 id="detail">6. Month-by-month detail and CSV export</h2>
+    <p>
+      The table for a pinned cycle has one row per month of that retirement. All
+      dollar amounts are as of the end of the month, after that month's growth,
+      withdrawal, and any rebalancing.
+    </p>
+    <div class="guide-table-scroll">
+      <table class="guide-table">
+        <tr><th>Column</th><th>What it shows</th></tr>
+        <tr><td>Month</td><td>Month number within this retirement, starting at 1.</td></tr>
+        <tr><td>Date</td><td>The calendar month of history being replayed.</td></tr>
+        <tr><td>Stock price, Bond price</td><td>The values from your stock and bond files for that month.</td></tr>
+        <tr><td>Infl-adj bond price</td><td>A price for the built asset: it starts level with the inflation index at the beginning of your data and compounds from there.</td></tr>
+        <tr><td>Inflation index</td><td>The value from your inflation file for that month.</td></tr>
+        <tr><td>Spending</td><td>The amount withdrawn that month.</td></tr>
+        <tr><td>Stock, Bond, Infl-adj bond balance</td><td>Dollars held in each asset at month end.</td></tr>
+        <tr><td>Portfolio value</td><td>The total across all three. It turns red once the cycle has run out.</td></tr>
+        <tr><td>Rebalanced</td><td>A check mark in months when the portfolio was reset to its target split.</td></tr>
+      </table>
+    </div>
+    <p>
+      <strong>Download CSV</strong> saves the same rows as a file you can open in
+      a spreadsheet, named after the cycle's start month. <strong>Close</strong>
+      unpins the cycle, and clicking the panel's header minimizes it without
+      losing your place.
+    </p>
+
+    <h2 id="limits">7. What this can and can't tell you</h2>
+    <ul>
+      <li><strong>History is one sample.</strong> A 100% success rate means the plan survived everything in your data, not everything that could happen.</li>
+      <li><strong>Cycles overlap.</strong> A cycle starting in January and one starting in February share almost all of their months, so 360 cycles is far less than 360 independent tests. One bad era can account for a whole cluster of failures.</li>
+      <li><strong>Recent start dates aren't tested.</strong> A 30-year cycle needs 30 years of data after its start, so the most recent decades only appear as the later years of older cycles.</li>
+      <li><strong>Costs are left out.</strong> There are no taxes, fund fees, or trading costs, and spending never adjusts to how the portfolio is doing.</li>
+      <li><strong>Your data sets the result.</strong> A price-only index, or data from a single country, changes the answer.</li>
+    </ul>
+    <p>
+      This is a tool for understanding how a plan behaves, not financial advice.
+    </p>
+    <p class="guide-link-row"><a class="guide-link" href="index.html">← Back to the backtester</a></p>
+  </div>
+
+  <script>
+    // The section 1 illustration: one fixed set of yearly returns, played in
+    // both orders against the same withdrawals. Every number shown in the
+    // text and caption is computed here so the prose can't drift from the
+    // chart.
+    (function () {
+      const START = 1000000;
+      const SPEND = 50000;
+      const weakFirst = [-12, -8, -4, 0, 1, 2, 3, 4, 5, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20];
+      const strongFirst = weakFirst.slice().reverse();
+
+      // Withdraw at the start of each year, then apply that year's return.
+      // The path stops at $0 — this picture is about when the money ran
+      // out, not how negative the arithmetic goes afterward.
+      function simulate(returns, spend) {
+        const path = [START];
+        let value = START;
+        let ranOutYear = null;
+        returns.forEach((r, i) => {
+          if (ranOutYear === null) {
+            value = (value - spend) * (1 + r / 100);
+            if (value <= 0) {
+              value = 0;
+              ranOutYear = i + 1;
+            }
+          }
+          path.push(value);
+        });
+        return { path, end: value, ranOutYear };
+      }
+
+      const dollars = (v) => '$' + Math.round(v).toLocaleString();
+      const millions = (v) => '$' + (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + 'M';
+
+      const strong = simulate(strongFirst, SPEND);
+      const weak = simulate(weakFirst, SPEND);
+      const untouched = simulate(weakFirst, 0); // same either way round — order only matters once you withdraw
+      const average = weakFirst.reduce((a, b) => a + b, 0) / weakFirst.length;
+
+      document.getElementById('ex-start').textContent = dollars(START);
+      document.getElementById('ex-spend').textContent = dollars(SPEND);
+      document.getElementById('ex-years').textContent = weakFirst.length;
+
+      const outcome = (run) => (run.ranOutYear ? `runs out of money in year ${run.ranOutYear}` : `finishes with ${dollars(run.end)}`);
+      document.getElementById('ex-caption').textContent =
+        `Both retirees earn the same ${weakFirst.length} yearly returns, averaging ${average.toFixed(1)}% a year. ` +
+        `With the strong years first, the portfolio ${outcome(strong)}. With the weak years first, it ${outcome(weak)}. ` +
+        `With no withdrawals at all, both orders would end at exactly the same ${dollars(untouched.end)}.`;
+
+      const W = 720, H = 320;
+      const m = { top: 12, right: 16, bottom: 40, left: 58 };
+      const iw = W - m.left - m.right;
+      const ih = H - m.top - m.bottom;
+      const years = weakFirst.length;
+      const yMax = Math.max(...strong.path, ...weak.path) * 1.05;
+      const x = (yr) => m.left + (yr / years) * iw;
+      const y = (v) => m.top + ih - (v / yMax) * ih;
+
+      let svg = '';
+      const tickStep = yMax > 4e6 ? 1e6 : 5e5;
+      for (let v = 0; v <= yMax; v += tickStep) {
+        svg += `<line x1="${m.left}" x2="${m.left + iw}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(255,255,255,${v === 0 ? 0.35 : 0.07})"/>`;
+        svg += `<text x="${m.left - 8}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="#adafb8">${v === 0 ? '$0' : millions(v)}</text>`;
+      }
+      for (let yr = 0; yr <= years; yr += 5) {
+        svg += `<text x="${x(yr)}" y="${m.top + ih + 16}" text-anchor="middle" font-size="11" fill="#adafb8">${yr}</text>`;
+      }
+      svg += `<text x="${m.left + iw / 2}" y="${H - 6}" text-anchor="middle" font-size="11" fill="#adafb8">Years into retirement</text>`;
+
+      const line = (run, color) => {
+        const pts = run.path.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+        return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>`;
+      };
+      svg += line(strong, '#90e58c') + line(weak, '#ffa9af');
+      if (weak.ranOutYear) {
+        svg += `<circle cx="${x(weak.ranOutYear)}" cy="${y(0)}" r="4.5" fill="#ffa9af" stroke="#17191f" stroke-width="1.5"/>`;
+        svg += `<text x="${x(weak.ranOutYear)}" y="${y(0) - 12}" text-anchor="middle" font-size="12" fill="#e6e8f0">Out of money, year ${weak.ranOutYear}</text>`;
+      }
+      document.getElementById('ex-chart').innerHTML = svg;
+    })();
+  </script>
+</body>
+</html>

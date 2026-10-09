@@ -12,8 +12,18 @@
       <h1>Sequence Risk</h1>
       <p class="subtitle">
         Test whether a retirement portfolio would have survived real historical market
-        conditions. Load historical stock, bond, and inflation data, then describe your
-        portfolio below.
+        conditions. Sequence risk is the danger that poor returns arrive early in
+        retirement, while you are withdrawing: two retirees with the same average
+        return can end up in very different places depending on the order the good
+        and bad years came in.
+      </p>
+      <ol class="how-to">
+        <li>Load three monthly CSV files (date, value): a stock index, a bond index, and an inflation index.</li>
+        <li>Enter your portfolio size, years in retirement, annual spending, and allocation, then run the backtest.</li>
+        <li>Read the success rate, hover the chart, and click any line for its month-by-month numbers.</li>
+      </ol>
+      <p class="guide-link-row">
+        <a class="guide-link" href="guide.html">Read the full guide, with examples and illustrations →</a>
       </p>
     </header>
 
@@ -146,14 +156,35 @@
             <span class="toggle-text">Log scale</span>
           </label>
           <span class="log-scale-note hidden" id="log-scale-note">Log scale can't show $0 or negative balances — failed cycles are flattened to the bottom edge.</span>
-          <span class="hover-hint">Hover a line, hold <kbd>Shift</kbd> to lock onto it and scrub its full history.</span>
+          <span class="hover-hint">Hover a line, hold <kbd>Shift</kbd> to lock onto it and scrub its full history. Click a line for its month-by-month detail.</span>
         </div>
         <canvas id="results-canvas" class="results-canvas"></canvas>
         <div class="chart-tooltip hidden" id="chart-tooltip"></div>
       </div>
-      <div class="failure-list-section hidden" id="failure-list-section">
-        <h3 class="failure-list-title" id="failure-list-title"></h3>
-        <div class="failure-list" id="failure-list"></div>
+      <div class="cycle-detail-section collapsible hidden" id="cycle-detail-section">
+        <div class="cycle-detail-header">
+          <button type="button" class="panel-toggle" aria-expanded="true" title="Minimize or expand">
+            <span class="chevron"></span>
+            <span>
+              <span class="cycle-detail-title" id="cycle-detail-title"></span>
+              <span class="cycle-detail-summary" id="cycle-detail-summary"></span>
+            </span>
+          </button>
+          <div class="cycle-detail-actions">
+            <button type="button" class="detail-button primary" id="cycle-download">Download CSV</button>
+            <button type="button" class="detail-button" id="cycle-clear">Close</button>
+          </div>
+        </div>
+        <div class="cycle-detail-scroll panel-body">
+          <table class="cycle-detail-table" id="cycle-detail-table"></table>
+        </div>
+      </div>
+      <div class="failure-list-section collapsible hidden" id="failure-list-section">
+        <button type="button" class="panel-toggle" aria-expanded="true" title="Minimize or expand">
+          <span class="chevron"></span>
+          <span class="failure-list-title" id="failure-list-title"></span>
+        </button>
+        <div class="failure-list panel-body" id="failure-list"></div>
       </div>
     </section>
   </div>

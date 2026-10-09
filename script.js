@@ -13,6 +13,11 @@
   // without re-running the backtest.
   let lastRunCycles = null;
   let lastRunYears = null;
+  // Also kept from the last run so one cycle's month-by-month detail can be
+  // recomputed on demand (see buildCycleRows) instead of storing a full
+  // row-per-month breakdown for every cycle up front.
+  let lastRunTimeline = null;
+  let lastRunConfig = null;
 
   const fileInputs = {
     stock: document.getElementById('csv-stock'),
@@ -62,6 +67,12 @@
   const failureListTitleEl = document.getElementById('failure-list-title');
   const failureListEl = document.getElementById('failure-list');
   const chartTooltip = document.getElementById('chart-tooltip');
+  const cycleDetailSection = document.getElementById('cycle-detail-section');
+  const cycleDetailTitleEl = document.getElementById('cycle-detail-title');
+  const cycleDetailSummaryEl = document.getElementById('cycle-detail-summary');
+  const cycleDetailTableEl = document.getElementById('cycle-detail-table');
+  const cycleDownloadButton = document.getElementById('cycle-download');
+  const cycleClearButton = document.getElementById('cycle-clear');
 
   // Set at the end of every drawResultsChart() call: a pristine pixel
   // snapshot of the base chart (axes + density, no highlight) and the
@@ -78,6 +89,14 @@
   // history instead of it jumping to whichever line is nearest on every
   // move. Releasing Shift (or leaving the chart) clears it.
   let lockedCycle = null;
+
+  // The cycle whose month-by-month detail table is open below the chart.
+  // Unlike the Shift lock it's set by a click and sticks until another
+  // cycle is clicked, it's cleared, or the backtest is re-run — so the
+  // cursor is free to leave the chart and reach the table and its
+  // download button. Its line stays drawn on the chart the whole time.
+  let pinnedCycle = null;
+  let pinnedRows = null;
 
   chartLogToggle.addEventListener('change', () => {
     logScaleNoteEl.classList.toggle('hidden', !chartLogToggle.checked);
@@ -97,9 +116,18 @@
     lockedCycle = null;
     hideChartHover();
   });
+  // Click pins whichever line is highlighted right then — the Shift-locked
+  // one if Shift is down, otherwise the nearest — and opens its detail.
+  resultsCanvas.addEventListener('click', (e) => {
+    const hit = pickCycleAt(e.clientX, e.clientY, e.shiftKey);
+    if (hit) pinCycle(hit.cycle);
+  });
 
-  function handleChartHover(clientX, clientY, shiftKey) {
-    if (!lastChartGeometry || !lastChartSnapshot) return;
+  // Hit-tests a cursor position against the chart: which month column it's
+  // over and which cycle's line is nearest there (or the Shift-locked
+  // cycle, if there is one). Null outside the plot area.
+  function pickCycleAt(clientX, clientY, shiftKey) {
+    if (!lastChartGeometry || !lastChartSnapshot) return null;
     if (!shiftKey) lockedCycle = null; // Shift released (or never held) — always track the nearest line
 
     const rect = resultsCanvas.getBoundingClientRect();
@@ -108,8 +136,7 @@
     const { margin, innerWidth, innerHeight, mapper, monthCount, cycles } = lastChartGeometry;
 
     if (mouseX < margin.left || mouseX > margin.left + innerWidth || mouseY < margin.top || mouseY > margin.top + innerHeight) {
-      hideChartHover();
-      return;
+      return null;
     }
 
     const monthFraction = ((mouseX - margin.left) / innerWidth) * (monthCount - 1);
@@ -133,20 +160,48 @@
       if (shiftKey) lockedCycle = best; // lock onto whichever line we just landed on
     }
 
-    if (best) drawChartHover(best, m, !!lockedCycle);
+    return best ? { cycle: best, m } : null;
+  }
+
+  function handleChartHover(clientX, clientY, shiftKey) {
+    const hit = pickCycleAt(clientX, clientY, shiftKey);
+    if (hit) drawChartHover(hit.cycle, hit.m, !!lockedCycle);
+    else hideChartHover();
   }
 
   function hideChartHover() {
     if (!lastChartSnapshot) return;
-    resultsCanvas.getContext('2d').putImageData(lastChartSnapshot, 0, 0);
+    restoreBaseChart();
     chartTooltip.classList.add('hidden');
   }
 
-  function drawChartHover(cycle, m, locked) {
+  // Puts the canvas back to the un-hovered chart — the snapshot plus the
+  // pinned cycle's line, if one is pinned — and returns the context with
+  // its transform restored, ready for hover overlays.
+  function restoreBaseChart() {
     const ctx = resultsCanvas.getContext('2d');
     ctx.putImageData(lastChartSnapshot, 0, 0);
     const dpr = window.devicePixelRatio || 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // putImageData ignores the transform — restore it for the draws below
+
+    if (pinnedCycle) {
+      const { margin, innerWidth, innerHeight, mapper, monthCount } = lastChartGeometry;
+      ctx.strokeStyle = '#8ab4f8'; // --accent
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      pinnedCycle.trajectory.forEach((v, i) => {
+        const x = margin.left + (i / (monthCount - 1)) * innerWidth;
+        const y = margin.top + innerHeight - mapper.toUnit(v) * innerHeight;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+    return ctx;
+  }
+
+  function drawChartHover(cycle, m, locked) {
+    const ctx = restoreBaseChart();
 
     const { margin, innerWidth, innerHeight, mapper, monthCount } = lastChartGeometry;
     const xForMonth = (mm) => margin.left + (mm / (monthCount - 1)) * innerWidth;
@@ -192,6 +247,7 @@
       <div class="tooltip-value">${formatDollars(cycle.trajectory[m])}</div>
       <div class="tooltip-year">Year ${yearsIn} of retirement${cycle.failed ? ' · failed' : ''}</div>
       ${locked ? '<div class="tooltip-locked">🔒 Locked — release Shift to browse</div>' : ''}
+      <div class="tooltip-hint">${cycle === pinnedCycle ? 'Detail shown below' : 'Click for month-by-month detail'}</div>
     `;
     chartTooltip.classList.remove('hidden');
 
@@ -524,7 +580,9 @@
   // rebalance back to the target split if this month lands on the chosen
   // interval. Keeps computing through $0 (buckets can go negative) so a
   // failed cycle's full trajectory — and how deep it went — still shows.
-  function simulateCycle(startIdx, cycleMonths, timeline, config) {
+  // Pass a `rows` array to also get one record per month of everything
+  // that went into that month's number (see buildCycleRows).
+  function simulateCycle(startIdx, cycleMonths, timeline, config, rows) {
     const { stockReturns, bondReturns, synthReturns, inflGrowth } = timeline;
     const trajectory = new Array(cycleMonths + 1);
     trajectory[0] = config.initialPortfolio;
@@ -563,10 +621,30 @@
         failedAtMonth = m; // first month it happened — matches timeline index startIdx + m
       }
 
+      let rebalanced = false;
       if (config.rebalanceEveryMonths && (m + 1) % config.rebalanceEveryMonths === 0) {
         bucket.stock = (totalAfterWithdrawal * config.allocStock) / 100;
         bucket.bond = (totalAfterWithdrawal * config.allocBond) / 100;
         bucket.infl = (totalAfterWithdrawal * config.allocInflation) / 100;
+        rebalanced = true;
+      }
+
+      if (rows) {
+        const ti = startIdx + m;
+        rows.push({
+          month: m + 1,
+          key: timeline.keys[ti],
+          stockPrice: timeline.stockPrices[ti],
+          bondPrice: timeline.bondPrices[ti],
+          synthPrice: timeline.synthPrices[ti],
+          inflPrice: timeline.inflPrices[ti],
+          spending,
+          stockBalance: bucket.stock,
+          bondBalance: bucket.bond,
+          synthBalance: bucket.infl,
+          total: totalAfterWithdrawal,
+          rebalanced,
+        });
       }
     }
 
@@ -584,7 +662,15 @@
     for (let i = 0; i < synthReturns.length; i++) {
       synthReturns[i] = timeline.inflGrowth[i] * realMonthlyGrowth - 1;
     }
-    const fullTimeline = { ...timeline, synthReturns };
+    // The synthetic bond has no uploaded price of its own, so give it one
+    // for the detail table: start it level with the inflation index and
+    // compound its monthly returns from there.
+    const synthPrices = new Array(timeline.keys.length);
+    synthPrices[0] = timeline.inflPrices[0];
+    for (let i = 0; i < synthReturns.length; i++) {
+      synthPrices[i + 1] = synthPrices[i] * (1 + synthReturns[i]);
+    }
+    const fullTimeline = { ...timeline, synthReturns, synthPrices };
 
     const cycleMonths = config.years * 12;
     const monthlyPoints = timeline.keys.length;
@@ -601,10 +687,10 @@
       // that index, or — for m=0 — the start date itself), so the failure
       // month's own calendar date is just that index into the timeline.
       const failedKey = result.failedAtMonth !== null ? timeline.keys[s + result.failedAtMonth] : null;
-      cycles.push({ startKey: timeline.keys[s], failedKey, ...result });
+      cycles.push({ startIdx: s, startKey: timeline.keys[s], failedKey, ...result });
     }
 
-    return { cycles, cycleMonths, numCycles };
+    return { cycles, cycleMonths, numCycles, timeline: fullTimeline };
   }
 
   function renderResults(run, config) {
@@ -628,7 +714,7 @@
     if (failedCycles.length) {
       failureListTitleEl.textContent = `Failed cycles (${failedCycles.length}) — start date → date it went to $0 or below`;
       failureListEl.innerHTML = failedCycles
-        .map((c) => `<div class="failure-list-item">${formatMonthKey(c.startKey)}<span class="arrow">→</span>${formatMonthKey(c.failedKey)}</div>`)
+        .map((c) => `<div class="failure-list-item" data-start-idx="${c.startIdx}" title="Show month-by-month detail">${formatMonthKey(c.startKey)}<span class="arrow">→</span>${formatMonthKey(c.failedKey)}</div>`)
         .join('');
       failureListSection.classList.remove('hidden');
     } else {
@@ -638,7 +724,110 @@
     resultsSection.classList.remove('hidden');
     lastRunCycles = cycles;
     lastRunYears = config.years;
+    lastRunTimeline = run.timeline;
+    lastRunConfig = config;
+    unpinCycle();
     drawResultsChart(cycles, config.years);
+  }
+
+  // ---------------------------------------------------------------------
+  // Month-by-month detail for one pinned cycle
+  // ---------------------------------------------------------------------
+
+  // Dollar amounts are as of the end of that month: after growth, the
+  // withdrawal, and any rebalance. `csv` is the plain value written to the
+  // download; `cell` is how it reads in the on-page table.
+  const DETAIL_COLUMNS = [
+    { label: 'Month', hint: 'Month number within this retirement', csv: (r) => r.month, cell: (r) => r.month },
+    { label: 'Date', hint: 'Calendar month of the historical data used', csv: (r) => r.key, cell: (r) => formatMonthKey(r.key) },
+    { label: 'Stock price', hint: 'From your stock CSV', csv: (r) => r.stockPrice, cell: (r) => formatPrice(r.stockPrice) },
+    { label: 'Bond price', hint: 'From your bond CSV', csv: (r) => r.bondPrice, cell: (r) => formatPrice(r.bondPrice) },
+    { label: 'Infl-adj bond price', hint: 'Synthetic: the inflation index compounded at your real yield', csv: (r) => r.synthPrice.toFixed(4), cell: (r) => formatPrice(r.synthPrice) },
+    { label: 'Inflation index', hint: 'From your inflation CSV', csv: (r) => r.inflPrice, cell: (r) => formatPrice(r.inflPrice) },
+    { label: 'Spending', hint: 'Withdrawn this month (annual spending / 12, inflated)', csv: (r) => r.spending.toFixed(2), cell: (r) => formatDollars(r.spending) },
+    { label: 'Stock balance', hint: 'Held in stocks at month end', csv: (r) => r.stockBalance.toFixed(2), cell: (r) => formatDollars(r.stockBalance) },
+    { label: 'Bond balance', hint: 'Held in bonds at month end', csv: (r) => r.bondBalance.toFixed(2), cell: (r) => formatDollars(r.bondBalance) },
+    { label: 'Infl-adj bond balance', hint: 'Held in inflation-adjusted bonds at month end', csv: (r) => r.synthBalance.toFixed(2), cell: (r) => formatDollars(r.synthBalance) },
+    { label: 'Portfolio value', hint: 'Total after this month’s withdrawal', csv: (r) => r.total.toFixed(2), cell: (r) => formatDollars(r.total) },
+    { label: 'Rebalanced', hint: 'Whether the portfolio was reset to its target split this month', csv: (r) => (r.rebalanced ? 'yes' : 'no'), cell: (r) => (r.rebalanced ? '✓' : '') },
+  ];
+
+  function buildCycleRows(cycle) {
+    const rows = [];
+    simulateCycle(cycle.startIdx, lastRunConfig.years * 12, lastRunTimeline, lastRunConfig, rows);
+    return rows;
+  }
+
+  function pinCycle(cycle) {
+    pinnedCycle = cycle;
+    pinnedRows = buildCycleRows(cycle);
+
+    const endKey = pinnedRows[pinnedRows.length - 1].key;
+    cycleDetailTitleEl.textContent = `Month by month: ${formatMonthKey(cycle.startKey)} – ${formatMonthKey(endKey)}`;
+    cycleDetailSummaryEl.textContent =
+      `Started with ${formatDollars(lastRunConfig.initialPortfolio)}, ended with ${formatDollars(cycle.endingBalance)}` +
+      (cycle.failed ? ` — ran out in ${formatMonthKey(cycle.failedKey)}.` : '.');
+
+    const head = DETAIL_COLUMNS.map((c) => `<th title="${c.hint}">${c.label}</th>`).join('');
+    const body = pinnedRows
+      .map((r) => `<tr class="${r.total <= 0 ? 'depleted' : ''}">${DETAIL_COLUMNS.map((c) => `<td>${c.cell(r)}</td>`).join('')}</tr>`)
+      .join('');
+    cycleDetailTableEl.innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
+    cycleDetailTableEl.parentElement.scrollTop = 0;
+
+    cycleDetailSection.classList.remove('hidden');
+    setCollapsed(cycleDetailSection, false); // a newly picked cycle should never open minimized
+    if (lastChartSnapshot) restoreBaseChart();
+  }
+
+  function unpinCycle() {
+    pinnedCycle = null;
+    pinnedRows = null;
+    cycleDetailSection.classList.add('hidden');
+    if (lastChartSnapshot) restoreBaseChart();
+  }
+
+  function downloadPinnedCsv() {
+    if (!pinnedRows) return;
+    const lines = [DETAIL_COLUMNS.map((c) => c.label).join(',')];
+    pinnedRows.forEach((r) => lines.push(DETAIL_COLUMNS.map((c) => c.csv(r)).join(',')));
+
+    const url = URL.createObjectURL(new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `sequence-risk-${pinnedCycle.startKey}-${lastRunConfig.years}yr.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // Minimize/expand for the panels under the chart: the header stays, the
+  // scrolling body below it is hidden.
+  function setCollapsed(panel, collapsed) {
+    panel.classList.toggle('collapsed', collapsed);
+    panel.querySelector('.panel-toggle').setAttribute('aria-expanded', String(!collapsed));
+  }
+  document.querySelectorAll('.collapsible .panel-toggle').forEach((button) => {
+    button.addEventListener('click', () => {
+      const panel = button.closest('.collapsible');
+      setCollapsed(panel, !panel.classList.contains('collapsed'));
+    });
+  });
+
+  cycleDownloadButton.addEventListener('click', downloadPinnedCsv);
+  cycleClearButton.addEventListener('click', unpinCycle);
+  failureListEl.addEventListener('click', (e) => {
+    const item = e.target.closest('.failure-list-item');
+    if (!item || !lastRunCycles) return;
+    pinCycle(lastRunCycles[Number(item.dataset.startIdx)]);
+    cycleDetailSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  // Index/price levels as uploaded — up to 2 decimals, no currency sign,
+  // since a CPI level or a total-return index isn't a dollar amount.
+  function formatPrice(value) {
+    return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -802,6 +991,7 @@
     lastChartGeometry = { margin, innerWidth, innerHeight, mapper, monthCount: cycles[0].trajectory.length, cycles };
     lockedCycle = null;
     chartTooltip.classList.add('hidden');
+    if (pinnedCycle) restoreBaseChart(); // a log-toggle or resize redraw keeps the pinned line
   }
 
   // Plots cycle density rather than individual strokes: with hundreds or

@@ -46,6 +46,238 @@ body {
   margin: 0 0 32px;
 }
 
+/* The landing page follows its subtitle with a short how-to list and a
+   link to the guide, so the gap below the subtitle moves down to the link. */
+.subtitle:has(+ .how-to) {
+  margin-bottom: 14px;
+}
+
+.how-to {
+  max-width: 640px;
+  margin: 0 0 14px;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.how-to li {
+  padding-left: 4px;
+}
+
+.guide-link-row {
+  margin: 0 0 32px;
+  font-size: 14px;
+}
+
+.guide-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.guide-link:hover {
+  text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------------
+   Guide page (guide.html)
+   --------------------------------------------------------------------- */
+
+.guide {
+  max-width: 720px;
+}
+
+.guide h2 {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 44px 0 12px;
+}
+
+.guide h3 {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 26px 0 8px;
+}
+
+.guide p,
+.guide li {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.guide p {
+  margin: 0 0 14px;
+}
+
+.guide ul,
+.guide ol {
+  margin: 0 0 14px;
+  padding-left: 22px;
+}
+
+.guide li {
+  margin-bottom: 6px;
+}
+
+.guide strong {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.guide a {
+  color: var(--accent);
+}
+
+.guide code,
+.guide pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.guide code {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--text-primary);
+}
+
+.guide pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 0 0 14px;
+  overflow-x: auto;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.guide-toc {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 14px 18px 8px;
+  margin: 0 0 8px;
+}
+
+.guide-toc ol {
+  margin: 0;
+}
+
+.figure {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 16px;
+  margin: 18px 0 20px;
+}
+
+.figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.figure figcaption,
+.figure-caption {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin-top: 12px;
+}
+
+.figure-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.figure-legend span::before {
+  content: "";
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+  margin-right: 8px;
+  vertical-align: middle;
+  background: var(--key);
+}
+
+/* The four things that happen to the portfolio each month, in order. */
+.step-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.step-flow .step {
+  flex: 1 1 140px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.step-flow .step b {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.step-flow .step span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.step-flow .step .step-num {
+  display: block;
+  font-size: 11px;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+
+.guide-table-scroll {
+  overflow-x: auto;
+  margin: 0 0 14px;
+}
+
+.guide-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.guide-table th,
+.guide-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 7px 12px 7px 0;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.5;
+}
+
+.guide-table th {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.guide-table td {
+  color: var(--text-secondary);
+}
+
+.guide-table td:first-child {
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
 .section-title {
   font-size: 16px;
   font-weight: 500;
@@ -429,6 +661,12 @@ body {
   font-size: 11px;
 }
 
+.chart-tooltip .tooltip-hint {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
 .chart-controls {
   display: flex;
   align-items: center;
@@ -515,26 +753,218 @@ body {
   cursor: crosshair;
 }
 
+.cycle-detail-section {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.cycle-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+}
+
+.cycle-detail-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accent);
+  margin: 0 0 2px;
+}
+
+.cycle-detail-summary {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Shared by the two panels under the chart: a header button that
+   minimizes/expands the scrolling body beneath it. */
+.panel-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.panel-toggle .chevron {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin: 0 2px 3px;
+  border-right: 2px solid var(--text-primary);
+  border-bottom: 2px solid var(--text-primary);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.collapsed .panel-toggle .chevron {
+  transform: rotate(-45deg);
+  margin-bottom: 0;
+}
+
+.collapsed .panel-body {
+  display: none;
+}
+
+/* Always-visible, high-contrast scrollbars for those bodies — the default
+   macOS overlay bars are near-invisible on this background and disappear
+   when idle. */
+.panel-body::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+.panel-body::-webkit-scrollbar-track {
+  background: #23262f;
+}
+
+.panel-body::-webkit-scrollbar-thumb {
+  background: #9a9eab;
+  border-radius: 7px;
+  border: 3px solid #23262f;
+}
+
+.panel-body::-webkit-scrollbar-thumb:hover {
+  background: #d3d6e0;
+}
+
+.panel-body::-webkit-scrollbar-corner {
+  background: #23262f;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .panel-body {
+    scrollbar-color: #9a9eab #23262f;
+  }
+}
+
+.cycle-detail-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.detail-button {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.detail-button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.detail-button.primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.detail-button.primary:hover {
+  background: rgba(138, 180, 248, 0.12);
+}
+
+.cycle-detail-scroll {
+  max-height: 75vh;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+}
+
+.cycle-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cycle-detail-table th,
+.cycle-detail-table td {
+  padding: 5px 8px;
+  text-align: right;
+}
+
+/* Headers wrap onto two lines so all twelve columns fit the page width
+   without a horizontal scroll hiding the portfolio value. */
+.cycle-detail-table th {
+  white-space: normal;
+  vertical-align: bottom;
+  line-height: 1.3;
+}
+
+.cycle-detail-table th:nth-child(2),
+.cycle-detail-table td:nth-child(2) {
+  text-align: left;
+}
+
+.cycle-detail-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-weight: 500;
+  box-shadow: inset 0 -1px 0 var(--border);
+  cursor: help;
+}
+
+.cycle-detail-table td {
+  color: var(--text-secondary);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.cycle-detail-table td:nth-child(11) {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.cycle-detail-table tr.depleted td:nth-child(11) {
+  color: var(--down);
+}
+
 .failure-list-section {
   margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.failure-list-section > .panel-toggle {
+  width: 100%;
+  padding: 12px 16px;
 }
 
 .failure-list-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
-  margin: 0 0 8px;
 }
 
+/* A grid rather than CSS columns: columns inside a fixed-height box
+   overflow sideways, which made this scroll horizontally. Reads left to
+   right, then down. */
 .failure-list {
-  columns: 220px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   column-gap: 20px;
-  max-height: 240px;
+  max-height: 60vh;
   overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border-top: 1px solid var(--border);
   padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.02);
   font-size: 12px;
   color: var(--text-secondary);
 }
@@ -543,6 +973,11 @@ body {
   break-inside: avoid;
   padding: 2px 0;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.failure-list-item:hover {
+  color: var(--text-primary);
 }
 
 .failure-list-item .arrow {
